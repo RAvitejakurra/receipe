@@ -2,74 +2,90 @@ package com.example.recipe.controller;
 
 import com.example.recipe.model.Recipe;
 import com.example.recipe.repository.RecipeRepository;
+import com.example.recipe.exception.RecipeNotFoundException;
+import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Optional;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/recipes")
 public class RecipeController {
 
+    private static final Logger logger = LoggerFactory.getLogger(RecipeController.class);
+    
     @Autowired
     private RecipeRepository recipeRepository;
 
-    // ✅ GET: Fetch all recipes
     @GetMapping
-    public ResponseEntity<?> getAllRecipes() {
+    public ResponseEntity<List<Recipe>> getAllRecipes(
+            @RequestParam(required = false) Boolean vegetarian,
+            @RequestParam(required = false) Integer servings,
+            @RequestParam(required = false) String includeIngredient,
+            @RequestParam(required = false) String excludeIngredient,
+            @RequestParam(required = false) String instructionKeyword) {
+        
         List<Recipe> recipes = recipeRepository.findAll();
-        if (recipes.isEmpty()) {
-            return ResponseEntity.status(404).body("No recipes found.");
+        logger.info("Fetching all recipes, found: {}", recipes.size());
+
+        if (vegetarian != null) {
+            recipes = recipes.stream().filter(r -> r.isVegetarian() == vegetarian).collect(Collectors.toList());
         }
+        if (servings != null) {
+            recipes = recipes.stream().filter(r -> r.getServings() == servings).collect(Collectors.toList());
+        }
+
+        if (includeIngredient != null) {
+            recipes = recipes.stream().filter(r -> r.getIngredients().contains(includeIngredient)).collect(Collectors.toList());
+        }
+        if (excludeIngredient != null) {
+            recipes = recipes.stream().filter(r -> !r.getIngredients().contains(excludeIngredient)).collect(Collectors.toList());
+        }
+        if (instructionKeyword != null) {
+            recipes = recipes.stream().filter(r -> r.getInstructions().toLowerCase().contains(instructionKeyword.toLowerCase())).collect(Collectors.toList());
+        }
+
         return ResponseEntity.ok(recipes);
     }
 
-    // ✅ GET: Fetch a recipe by ID
     @GetMapping("/{id}")
-    public ResponseEntity<?> getRecipeById(@PathVariable String id) {
-        Optional<Recipe> recipe = recipeRepository.findById(id);
-        
-        if (recipe.isPresent()) {
-            return ResponseEntity.ok(recipe.get());
-        } else {
-            return ResponseEntity.status(404).body("Error: Recipe with ID " + id + " not found.");
-        }
+    public ResponseEntity<Recipe> getRecipeById(@PathVariable String id) {
+        logger.info("Fetching recipe with ID: {}", id);
+        Recipe recipe = recipeRepository.findById(id)
+                .orElseThrow(() -> new RecipeNotFoundException("Recipe with ID " + id + " not found."));
+        return ResponseEntity.ok(recipe);
     }
 
-
-    // ✅ POST: Add a new recipe
     @PostMapping
-    public ResponseEntity<?> addRecipe(@RequestBody Recipe recipe) {
-        if (recipe.getName() == null || recipe.getName().isEmpty()) {
-            return ResponseEntity.status(400).body("Error: Recipe name is required.");
-        }
+    public ResponseEntity<Recipe> addRecipe(@Valid @RequestBody Recipe recipe) {
+        logger.info("Adding new recipe: {}", recipe.getName());
         Recipe savedRecipe = recipeRepository.save(recipe);
-        return ResponseEntity.status(201).body(savedRecipe);
+        return ResponseEntity.status(HttpStatus.CREATED).body(savedRecipe);
     }
 
-    // ✅ PUT: Update an existing recipe
     @PutMapping("/{id}")
-    public ResponseEntity<?> updateRecipe(@PathVariable String id, @RequestBody Recipe updatedRecipe) {
-        Optional<Recipe> existingRecipe = recipeRepository.findById(id);
-
-        if (existingRecipe.isPresent()) {
-            updatedRecipe.setId(id);  // Preserve the original ID
-            Recipe savedRecipe = recipeRepository.save(updatedRecipe);
-            return ResponseEntity.ok(savedRecipe);
-        } else {
-            return ResponseEntity.status(404).body("Error: Recipe with ID " + id + " not found.");
-        }
+    public ResponseEntity<Recipe> updateRecipe(@PathVariable String id, @Valid @RequestBody Recipe updatedRecipe) {
+        logger.info("Updating recipe with ID: {}", id);
+        Recipe existingRecipe = recipeRepository.findById(id)
+                .orElseThrow(() -> new RecipeNotFoundException("Recipe with ID " + id + " not found."));
+        updatedRecipe.setId(existingRecipe.getId());
+        Recipe savedRecipe = recipeRepository.save(updatedRecipe);
+        return ResponseEntity.ok(savedRecipe);
     }
 
-    // ✅ DELETE: Remove a recipe by ID
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteRecipe(@PathVariable String id) {
+    public ResponseEntity<Void> deleteRecipe(@PathVariable String id) {
+        logger.info("Deleting recipe with ID: {}", id);
         if (!recipeRepository.existsById(id)) {
-            return ResponseEntity.status(404).body("Error: Recipe with ID " + id + " not found.");
+            throw new RecipeNotFoundException("Recipe with ID " + id + " not found.");
         }
         recipeRepository.deleteById(id);
-        return ResponseEntity.ok("Recipe with ID " + id + " deleted successfully.");
+        return ResponseEntity.noContent().build();
     }
 }
