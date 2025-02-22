@@ -25,11 +25,18 @@ public class RecipeService {
     }
 
     public Recipe updateRecipe(String id, Recipe updatedRecipe) {
-        if (recipeRepository.existsById(id)) {
-            updatedRecipe.setId(id);
+        // Fetch the existing recipe from the database
+        Optional<Recipe> existingRecipeOpt = recipeRepository.findById(id);
+        if (existingRecipeOpt.isPresent()) {
+            Recipe existingRecipe = existingRecipeOpt.get();
+            
+            // Preserve the original ID
+            updatedRecipe.setId(existingRecipe.getId());
+
+            // Save the updated recipe
             return recipeRepository.save(updatedRecipe);
         }
-        return null;
+        return null; // Or throw an exception (better practice)
     }
 
     public void deleteRecipe(String id) {
