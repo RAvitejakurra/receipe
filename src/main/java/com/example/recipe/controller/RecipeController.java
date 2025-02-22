@@ -1,40 +1,75 @@
 package com.example.recipe.controller;
 
 import com.example.recipe.model.Recipe;
-import com.example.recipe.service.RecipeService;
+import com.example.recipe.repository.RecipeRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.List;
 import java.util.Optional;
 
 @RestController
 @RequestMapping("/recipes")
 public class RecipeController {
+
     @Autowired
-    private RecipeService recipeService;
+    private RecipeRepository recipeRepository;
 
+    // ✅ GET: Fetch all recipes
     @GetMapping
-    public List<Recipe> getAllRecipes() {
-        return recipeService.getAllRecipes();
+    public ResponseEntity<?> getAllRecipes() {
+        List<Recipe> recipes = recipeRepository.findAll();
+        if (recipes.isEmpty()) {
+            return ResponseEntity.status(404).body("No recipes found.");
+        }
+        return ResponseEntity.ok(recipes);
     }
 
+    // ✅ GET: Fetch a recipe by ID
     @GetMapping("/{id}")
-    public Optional<Recipe> getRecipeById(@PathVariable String id) {
-        return recipeService.getRecipeById(id);
+    public ResponseEntity<?> getRecipeById(@PathVariable String id) {
+        Optional<Recipe> recipe = recipeRepository.findById(id);
+        
+        if (recipe.isPresent()) {
+            return ResponseEntity.ok(recipe.get());
+        } else {
+            return ResponseEntity.status(404).body("Error: Recipe with ID " + id + " not found.");
+        }
     }
 
+
+    // ✅ POST: Add a new recipe
     @PostMapping
-    public Recipe addRecipe(@RequestBody Recipe recipe) {
-        return recipeService.addRecipe(recipe);
+    public ResponseEntity<?> addRecipe(@RequestBody Recipe recipe) {
+        if (recipe.getName() == null || recipe.getName().isEmpty()) {
+            return ResponseEntity.status(400).body("Error: Recipe name is required.");
+        }
+        Recipe savedRecipe = recipeRepository.save(recipe);
+        return ResponseEntity.status(201).body(savedRecipe);
     }
 
+    // ✅ PUT: Update an existing recipe
     @PutMapping("/{id}")
-    public Recipe updateRecipe(@PathVariable String id, @RequestBody Recipe updatedRecipe) {
-        return recipeService.updateRecipe(id, updatedRecipe);
+    public ResponseEntity<?> updateRecipe(@PathVariable String id, @RequestBody Recipe updatedRecipe) {
+        Optional<Recipe> existingRecipe = recipeRepository.findById(id);
+
+        if (existingRecipe.isPresent()) {
+            updatedRecipe.setId(id);  // Preserve the original ID
+            Recipe savedRecipe = recipeRepository.save(updatedRecipe);
+            return ResponseEntity.ok(savedRecipe);
+        } else {
+            return ResponseEntity.status(404).body("Error: Recipe with ID " + id + " not found.");
+        }
     }
 
+    // ✅ DELETE: Remove a recipe by ID
     @DeleteMapping("/{id}")
-    public void deleteRecipe(@PathVariable String id) {
-        recipeService.deleteRecipe(id);
+    public ResponseEntity<?> deleteRecipe(@PathVariable String id) {
+        if (!recipeRepository.existsById(id)) {
+            return ResponseEntity.status(404).body("Error: Recipe with ID " + id + " not found.");
+        }
+        recipeRepository.deleteById(id);
+        return ResponseEntity.ok("Recipe with ID " + id + " deleted successfully.");
     }
 }
